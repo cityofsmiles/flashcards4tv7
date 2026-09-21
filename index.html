@@ -702,6 +702,65 @@
   $('endNext').onclick = function () { openSet(v.setIdx + 1); };
   $('endSets').onclick = function () { goBack(); };
 
+  /* ---------------- Keep the TV awake ---------------- */
+  // Two layers: the Screen Wake Lock API where the TV's browser supports it, plus a
+  // tiny silent looping video (TVs treat video playback as "in use" and skip the
+  // screen saver). Both are invisible.
+  var KEEP_AWAKE_WEBM = 'data:video/webm;base64,GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAALCEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHYTbuMU6uEElTDZ1OsggEeTbuMU6uEHFO7a1OsggKs7AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsirXsYMPQkBNgI1MYXZmNjAuMTYuMTAwV0GNTGF2ZjYwLjE2LjEwMESJiECfQAAAAAAAFlSua8GuAQAAAAAAADjXgQFzxYi1SNuFtjFPq5yBACK1nIN1bmSIgQCGhVZfVlA4g4EBI+ODhAvrwgDgibCBQLqBQJqBAhJUw2f8c3OgY8CAZ8iaRaOHRU5DT0RFUkSHjUxhdmY2MC4xNi4xMDBzc9ZjwItjxYi1SNuFtjFPq2fIoUWjh0VOQ09ERVJEh5RMYXZjNjAuMzEuMTAyIGxpYnZweGfIoUWjiERVUkFUSU9ORIeTMDA6MDA6MDIuMDAwMDAwMDAwAB9DtnVBB+eBAKOqgQAAgPACAJ0BKkAAQAAARwiFhYiFhIgCAgAGcDxCYAqyIPcwAP7/q1CAo5aBAMgA0QEABxDsABgAGFgv9AAIjoAAo5aBAZAA0QEABxDsABgAGFgv9AAIjoAAo5aBAlgA0QEABxDsABgAGFgv9AAIjoAAo5aBAyAA0QEABxDsABgAGFgv9AAIjoAAo5aBA+gA0QEABxDsABgAGFgv9AAIjoAAo5aBBLAA0QEABxDsABgAGFgv9AAIjoAAo5aBBXgA0QEABxAQFGAAYWC/0AAiOgAAo5aBBkAA0QEABxDsABgAGFgv9AAIjoAAo5aBBwgA0QEABxDsABgAGFgv9AAIjoAAHFO7a5G7j7OBALeK94EB8YIBn/CBAw==';
+  var KEEP_AWAKE_MP4 = 'data:video/mp4;base64,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';
+  var wakeLock = null;
+  var keepVideo = null;
+
+  function requestWakeLock() {
+    if (wakeLock || document.hidden) { return; }
+    if (!navigator.wakeLock || !navigator.wakeLock.request) { return; }
+    try {
+      navigator.wakeLock.request('screen').then(function (lock) {
+        wakeLock = lock;
+        lock.addEventListener('release', function () { wakeLock = null; });
+      }, function () {});
+    } catch (e) {}
+  }
+
+  function playKeepVideo() {
+    if (!keepVideo) {
+      keepVideo = document.createElement('video');
+      keepVideo.muted = true;
+      keepVideo.loop = true;
+      keepVideo.setAttribute('muted', '');
+      keepVideo.setAttribute('playsinline', '');
+      keepVideo.setAttribute('webkit-playsinline', '');
+      keepVideo.setAttribute('aria-hidden', 'true');
+      keepVideo.tabIndex = -1;
+      keepVideo.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;' +
+        'opacity:0.01;pointer-events:none;z-index:-1;';
+      var srcs = [['video/mp4', KEEP_AWAKE_MP4], ['video/webm', KEEP_AWAKE_WEBM]];
+      for (var i = 0; i < srcs.length; i++) {
+        var so = document.createElement('source');
+        so.type = srcs[i][0];
+        so.src = srcs[i][1];
+        keepVideo.appendChild(so);
+      }
+      document.body.appendChild(keepVideo);
+    }
+    if (keepVideo.paused) {
+      try {
+        var p = keepVideo.play();
+        if (p && p.catch) { p.catch(function () {}); }
+      } catch (e) {}
+    }
+  }
+
+  function keepAwake() { requestWakeLock(); playKeepVideo(); }
+
+  keepAwake();
+  // Autoplay can be blocked until the first remote press, so retry on input,
+  // when the app returns to the foreground, and every 20 seconds as a safety net.
+  document.addEventListener('keydown', keepAwake, true);
+  document.addEventListener('click', keepAwake, true);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) { keepAwake(); } });
+  setInterval(keepAwake, 20000);
+
   /* ---------------- Start ---------------- */
   loadAll(function (usedFallback, indexMissing) {
     var note = '';
