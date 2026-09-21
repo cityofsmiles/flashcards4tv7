@@ -216,7 +216,10 @@
 
   /* ---------------- Configuration ---------------- */
   var SHEET_ID = '1n3Vw5XMHBugC-hWxL9SHmeTrn3DiGJJWnCU9_hXb7NI';
-  // One entry per tab (sheet) in the Google spreadsheet. The tab name is the title.
+  // Name of the tab that lists your topic tabs (one tab name per row in column A).
+  // Must match the tab's name exactly.
+  var INDEX_TAB = 'index';
+  // Used only if the index tab is missing or empty. One entry per tab in the spreadsheet.
   var TOPICS = ['addition-of-integers', 'subtraction-of-integers'];
   // Used only if the Google Sheet cannot be reached.
   var FALLBACK = { owner: 'cityofsmiles', repo: 'flashcards4tv7', branch: 'main', sets: 50 };
@@ -251,7 +254,8 @@
   var topics = [];      // [{id, title, sets:[{num, base}], fromSheet}]
   var jsonpCount = 0;
 
-  function fetchSheet(name, cb) {
+  function fetchSheet(name, cb, headerRows) {
+    if (headerRows == null) { headerRows = 1; }
     var cbName = '__gviz' + (++jsonpCount) + '_' + Math.floor(Math.random() * 1000000);
     var done = false;
     var s = document.createElement('script');
@@ -268,7 +272,7 @@
     s.onerror = function () { finish(null); };
     s.src = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
       '/gviz/tq?tqx=out:json;responseHandler:' + cbName +
-      '&headers=1&sheet=' + encodeURIComponent(name);
+      '&headers=' + headerRows + '&sheet=' + encodeURIComponent(name);
     document.head.appendChild(s);
   }
 
@@ -303,20 +307,67 @@
     return sets;
   }
 
-  function loadAll(done) {
-    var remaining = TOPICS.length;
+  // Reads the index tab: column A holds one tab name per row. A header row
+  // (e.g. "Topics") is optional and is skipped automatically.
+  function parseIndex(resp) {
+    var names = [];
+    if (!resp || !resp.table || !resp.table.rows) { return names; }
+    var rows = resp.table.rows;
+    var headerWords = { tab: 1, tabs: 1, 'tab name': 1, 'tab names': 1, topic: 1, topics: 1,
+                        name: 1, names: 1, sheet: 1, sheets: 1, index: 1 };
+    var seen = {};
+    for (var i = 0; i < rows.length; i++) {
+      var c = rows[i].c;
+      // A slide-set row (URL in column B) means Google returned a topic tab
+      // instead of an index tab, so the index tab doesn't exist.
+      if (c && c[1] && c[1].v != null && /^https?:/i.test(String(c[1].v))) { return []; }
+      if (!c || !c[0] || c[0].v == null) { continue; }
+      var name = String(c[0].v).replace(/^\s+|\s+$/g, '');
+      if (!name) { continue; }
+      var low = name.toLowerCase();
+      if (headerWords[low] || low === INDEX_TAB.toLowerCase()) { continue; }
+      if (seen[low]) { continue; }
+      seen[low] = true;
+      names.push(name);
+    }
+    return names;
+  }
+
+  function loadTopics(ids, fromIndex, done) {
+    var remaining = ids.length;
     var anyFallback = false;
-    topics = new Array(TOPICS.length);
-    TOPICS.forEach(function (id, idx) {
+    var loaded = new Array(ids.length);
+    ids.forEach(function (id, idx) {
       fetchSheet(id, function (resp) {
         var sets = parseSets(resp);
         var fromSheet = sets.length > 0;
-        if (!fromSheet) { sets = fallbackSets(id); anyFallback = true; }
-        topics[idx] = { id: id, title: pretty(id), sets: sets, fromSheet: fromSheet };
+        if (!fromSheet) {
+          // Only tabs from the built-in list get the GitHub fallback; an unknown
+          // or empty tab from the index is skipped rather than shown broken.
+          if (!fromIndex || TOPICS.indexOf(id) >= 0) {
+            sets = fallbackSets(id);
+            anyFallback = true;
+          } else {
+            sets = null;
+          }
+        }
+        if (sets) { loaded[idx] = { id: id, title: pretty(id), sets: sets, fromSheet: fromSheet }; }
         remaining--;
-        if (remaining === 0) { done(anyFallback); }
+        if (remaining === 0) {
+          topics = loaded.filter(function (t) { return !!t; });
+          done(anyFallback, !fromIndex);
+        }
       });
     });
+  }
+
+  function loadAll(done) {
+    fetchSheet(INDEX_TAB, function (resp) {
+      var ids = parseIndex(resp);
+      var fromIndex = ids.length > 0;
+      if (!fromIndex) { ids = TOPICS.slice(); }
+      loadTopics(ids, fromIndex, done);
+    }, 0);
   }
 
   function findTopic(id) {
@@ -652,11 +703,14 @@
   $('endSets').onclick = function () { goBack(); };
 
   /* ---------------- Start ---------------- */
-  loadAll(function (usedFallback) {
-    $('menuNote').textContent = usedFallback
-      ? 'Could not read the Google Sheet, so a saved list of sets is shown.'
-      : '';
+  loadAll(function (usedFallback, indexMissing) {
+    var note = '';
+    if (!topics.length) { note = 'No topics found. Check the "' + INDEX_TAB + '" tab in your Google Sheet.'; }
+    else if (usedFallback) { note = 'Could not read the Google Sheet, so a saved list of sets is shown.'; }
+    else if (indexMissing) { note = 'No "' + INDEX_TAB + '" tab found, so the built-in topic list is shown.'; }
+    $('menuNote').textContent = note;
     route();
+    if (!topics.length) { showScreen('menu'); }
   });
 })();
 </script>
