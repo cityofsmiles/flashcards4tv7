@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#000000">
 <title>Flashcards</title>
 <style>
   html, body {
@@ -171,9 +175,29 @@
     font-size: 2.4vw;
     font-weight: 700;
   }
+
+  /* Rotate hint: only on touch devices held in portrait */
+  #rotateHint {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    padding: 1.2vh 4vw;
+    background: #fff;
+    color: #000;
+    text-align: center;
+    font-size: 4vw;
+    font-weight: 700;
+    pointer-events: none;
+  }
+  @media (orientation: portrait) and (hover: none) and (pointer: coarse) {
+    #rotateHint { display: block; }
+  }
 </style>
 </head>
 <body>
+<div id="rotateHint">Rotate your device to landscape ↻</div>
+
 
 <section id="menu" class="screen">
   <h1>Flashcards</h1>
@@ -760,6 +784,58 @@
   document.addEventListener('click', keepAwake, true);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) { keepAwake(); } });
   setInterval(keepAwake, 20000);
+
+  /* ---------------- Full screen + landscape ---------------- */
+  // Browsers only allow full screen after a key press or tap, so this tries on the
+  // first input. If you exit full screen yourself it won't force you back in.
+  var fsExited = false;
+  var fsEntered = false;
+
+  function isFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+              document.mozFullScreenElement || document.msFullscreenElement);
+  }
+
+  function lockLandscape() {
+    try {
+      var o = screen.orientation;
+      if (o && o.lock) {
+        var p = o.lock('landscape');
+        if (p && p.catch) { p.catch(function () {}); }
+      } else if (screen.lockOrientation) {
+        screen.lockOrientation('landscape');
+      } else if (screen.webkitLockOrientation) {
+        screen.webkitLockOrientation('landscape');
+      }
+    } catch (e) {}
+  }
+
+  function goFullscreen() {
+    if (fsExited || isFullscreen()) { return; }
+    var el = document.documentElement;
+    var req = el.requestFullscreen || el.webkitRequestFullscreen ||
+              el.mozRequestFullScreen || el.msRequestFullscreen;
+    if (!req) { lockLandscape(); return; }
+    try {
+      var p = req.call(el);
+      if (p && p.then) { p.then(lockLandscape, function () {}); } else { lockLandscape(); }
+    } catch (e) {}
+  }
+
+  function onFsChange() {
+    if (isFullscreen()) { fsEntered = true; lockLandscape(); }
+    else if (fsEntered) { fsExited = true; }   // the person left full screen on purpose
+  }
+  document.addEventListener('fullscreenchange', onFsChange);
+  document.addEventListener('webkitfullscreenchange', onFsChange);
+  document.addEventListener('mozfullscreenchange', onFsChange);
+  document.addEventListener('MSFullscreenChange', onFsChange);
+
+  goFullscreen();   // works right away when launched as an installed / TV app
+  lockLandscape();
+  document.addEventListener('keydown', goFullscreen, true);
+  document.addEventListener('click', goFullscreen, true);
+  document.addEventListener('touchend', goFullscreen, true);
 
   /* ---------------- Start ---------------- */
   loadAll(function (usedFallback, indexMissing) {
